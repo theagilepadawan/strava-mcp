@@ -3,12 +3,12 @@ from setuptools import setup, find_packages
 setup(
     name="create-strava-mcp",  # ← Package name uses dashes
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Michael Gundersen",
+    author_email="michael.nesodden@gmail.com",
     description="Automated setup tool for Strava MCP integration with Claude Desktop",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/your-username/strava-mcp",
+    url="https://github.com/theagilepadawan/strava-mcp",
     py_modules=["setup_strava_mcp"],  # ← Python module uses underscores
     classifiers=[
         "Development Status :: 4 - Beta",
