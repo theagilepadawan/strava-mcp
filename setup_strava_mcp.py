@@ -12,6 +12,7 @@ import webbrowser
 import requests
 import time
 import signal
+import toml
 from pathlib import Path
 from typing import Optional
 
@@ -50,11 +51,14 @@ def ask(question: str) -> str:
 def run(cmd: str, cwd: Optional[Path] = None) -> bool:
     try:
         log(f"Executing: {cmd}", Colors.BLUE)
-        result = subprocess.run(cmd, shell=True, cwd=cwd, check=True)
+        result = subprocess.run(
+            cmd, shell=True, cwd=cwd, check=True, capture_output=True, text=True
+        )
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         log(f"❌ Command failed: {cmd}", Colors.RED)
-        log(str(e), Colors.RED)
+        log(f"  stdout: {e.stdout}", Colors.RED)
+        log(f"  stderr: {e.stderr}", Colors.RED)
         return False
 
 
@@ -70,14 +74,26 @@ def setup_virtual_env(install_path: Path) -> bool:
         python = venv / "bin" / "python"
         pip = venv / "bin" / "pip"
 
-    run(f"{python} -m pip install --upgrade pip")
+    run(f'"{python}" -m pip install --upgrade pip')
 
-    req = install_path / "requirements.txt"
-    if not req.exists():
-        log(f"❌ requirements.txt not found at: {req}", Colors.RED)
+    proj_file = install_path / "pyproject.toml"
+    if not proj_file.exists():
+        log(f"❌ pyproject.toml not found at: {proj_file}", Colors.RED)
         return False
 
-    return run(f"{pip} install -r {req}", cwd=install_path)
+    config = toml.load(proj_file)
+    dependencies = (
+        config.get("project", {}).get("optional-dependencies", {}).get("app", [])
+    )
+
+    if not dependencies:
+        log("✅ No app dependencies found to install.", Colors.GREEN)
+        return True
+
+    dep_string = " ".join(f'"{dep}"' for dep in dependencies)
+    log(f"📦 Installing app dependencies: {dep_string}", Colors.BLUE)
+
+    return run(f'"{pip}" install {dep_string}', cwd=install_path)
 
 
 def authenticate() -> tuple[Optional[str], Optional[str]]:

@@ -27,8 +27,18 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.31.0",
+    "toml",
 ]
 keywords = ["strava", "mcp", "claude", "anthropic", "fitness", "automation"]
+
+[project.optional-dependencies]
+app = [
+    "flask==2.3.3",
+    "flask-cors==4.0.0",
+    "flask-limiter==3.5.0",
+    "requests==2.31.0",
+    "gunicorn==21.2.0"
+]
 
 [project.urls]
 Homepage = "https://github.com/theagilepadawan/strava-mcp"
