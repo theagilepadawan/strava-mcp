@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "requests>=2.31.0",
     "toml",
+    "dotenv"
 ]
 keywords = ["strava", "mcp", "claude", "anthropic", "fitness", "automation"]
 
