@@ -1,0 +1,23 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "backend.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "app.py"
+        }
+    ],
+    "env": {
+        "STRAVA_CLIENT_ID": "26565"
+    },
+    "functions": {
+        "app.py": {
+            "maxDuration": 10
+        }
+    }
+}
