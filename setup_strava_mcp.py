@@ -15,6 +15,7 @@ import signal
 import toml
 from pathlib import Path
 from typing import Optional
+import urllib.parse
 
 
 # ANSI colors
@@ -92,10 +93,16 @@ def setup_virtual_env(install_path: Path) -> bool:
 
 def authenticate() -> tuple[Optional[str], Optional[str]]:
     redirect_uri = f"{TOKEN_SERVICE_URL}/callback"
-    auth_url = (
-        f"https://www.strava.com/oauth/authorize?"
-        f"client_id={CLIENT_ID}&response_type=code&redirect_uri={redirect_uri}"
-        f"&approval_prompt=auto&scope=activity:read_all,profile:read_all"
+    params = {
+        "client_id": CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": f"{TOKEN_SERVICE_URL}/callback",
+        "approval_prompt": "auto",
+        "scope": "activity:read_all,profile:read_all",
+    }
+
+    auth_url = "https://www.strava.com/oauth/authorize?" + urllib.parse.urlencode(
+        params
     )
 
     log("🌐 Opening browser to authenticate with Strava")
