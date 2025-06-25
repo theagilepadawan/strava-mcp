@@ -25,6 +25,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+dependencies = [
+    "requests>=2.31.0",
+]
 keywords = ["strava", "mcp", "claude", "anthropic", "fitness", "automation"]
 
 [project.urls]
