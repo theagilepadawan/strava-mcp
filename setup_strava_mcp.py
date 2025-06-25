@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Automated setup tool for Strava MCP integration with Claude Desktop.
-Designed for use with pipx or standalone execution.
+Now pipx-compatible with dynamic requirements.txt path resolution.
 """
 
 import sys
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 
-# ANSI terminal colors
+# ANSI colors
 class Colors:
     GREEN = "\033[32m"
     BLUE = "\033[34m"
@@ -26,116 +26,41 @@ class Colors:
     BOLD = "\033[1m"
 
 
-# Configuration
+# Config
 TOKEN_SERVICE_URL = "https://strava-mcp-backend.vercel.app"
 CLIENT_ID = "26565"
-REPO_URL = "https://github.com/theagilepadawan/strava-mcp.git"
 
-# Determine install path relative to this script
-SCRIPT_DIR = Path(__file__).resolve().parent
+# Resolve install path even inside pipx
+SCRIPT_PATH = Path(__file__).resolve()
+INSTALL_PATH = SCRIPT_PATH
+while INSTALL_PATH.name != "site-packages" and INSTALL_PATH != INSTALL_PATH.parent:
+    INSTALL_PATH = INSTALL_PATH.parent
+# We're now in the venv's site-packages folder — assume the repo root is one level up
+INSTALL_PATH = INSTALL_PATH.parent
 
 
-def log(message: str, color: str = Colors.RESET):
-    print(f"{color}{message}{Colors.RESET}")
+def log(msg, color=Colors.RESET):
+    print(f"{color}{msg}{Colors.RESET}")
 
 
-def ask_question(question: str) -> str:
+def ask(question: str) -> str:
     return input(f"{question}").strip()
 
 
-def run_command(command: str, cwd: Optional[str] = None, check: bool = True) -> bool:
+def run(cmd: str, cwd: Optional[Path] = None) -> bool:
     try:
-        log(f"Executing: {command}", Colors.BLUE)
-        result = subprocess.run(
-            command, shell=True, cwd=cwd, check=check, capture_output=False
-        )
+        log(f"Executing: {cmd}", Colors.BLUE)
+        result = subprocess.run(cmd, shell=True, cwd=cwd, check=True)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
-        log(f"Error executing command: {command}", Colors.RED)
+        log(f"❌ Command failed: {cmd}", Colors.RED)
         log(str(e), Colors.RED)
         return False
 
 
-def get_claude_config_path() -> Path:
-    home = Path.home()
-    system = platform.system()
-    if system == "Darwin":
-        return home / "Library/Application Support/Claude/claude_desktop_config.json"
-    elif system == "Windows":
-        return home / "AppData/Roaming/Claude/claude_desktop_config.json"
-    else:
-        return home / ".config/claude/claude_desktop_config.json"
-
-
-def update_claude_config(mcp_path: Path, access_token: str, refresh_token: str) -> bool:
-    config_path = get_claude_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    config = {}
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text())
-        except Exception:
-            log("⚠️ Failed to parse existing config, will overwrite.", Colors.YELLOW)
-
-    config.setdefault("mcpServers", {})
-    config["mcpServers"]["strava-mcp"] = {
-        "command": "python",
-        "args": [str(mcp_path / "strava-mcp.py")],
-        "env": {
-            "STRAVA_CLIENT_ID": CLIENT_ID,
-            "STRAVA_REFRESH_TOKEN": refresh_token,
-            "STRAVA_TOKEN_SERVICE_URL": TOKEN_SERVICE_URL,
-            "STRAVA_DB_PATH": str(mcp_path / "strava_data.db"),
-        },
-    }
-
-    try:
-        config_path.write_text(json.dumps(config, indent=2))
-        log(f"✅ Claude config updated: {config_path}", Colors.GREEN)
-        return True
-    except Exception as e:
-        log(f"❌ Failed to write config: {e}", Colors.RED)
-        return False
-
-
-def authenticate_with_strava() -> tuple[Optional[str], Optional[str]]:
-    log("\n🔐 Strava Authentication", Colors.BOLD)
-    redirect_uri = f"{TOKEN_SERVICE_URL}/callback"
-    auth_url = (
-        f"https://www.strava.com/oauth/authorize?"
-        f"client_id={CLIENT_ID}&response_type=code&redirect_uri={redirect_uri}"
-        f"&approval_prompt=auto&scope=activity:read_all,profile:read_all"
-    )
-
-    webbrowser.open(auth_url)
-    log("➡️ Complete authentication in browser, then paste tokens below.")
-
-    access_token = ask_question("Paste access_token: ")
-    refresh_token = ask_question("Paste refresh_token: ")
-
-    if not access_token or not refresh_token:
-        log("❌ Missing tokens", Colors.RED)
-        return None, None
-
-    try:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        r = requests.get("https://www.strava.com/api/v3/athlete", headers=headers)
-        if r.status_code == 200:
-            name = r.json().get("firstname", "athlete")
-            log(f"✅ Welcome, {name}!", Colors.GREEN)
-            return access_token, refresh_token
-        else:
-            log("❌ Token validation failed", Colors.RED)
-            return None, None
-    except Exception as e:
-        log(f"⚠️ Token check failed: {e}", Colors.YELLOW)
-        return access_token, refresh_token
-
-
-def setup_virtual_environment(install_path: Path) -> bool:
+def setup_virtual_env(install_path: Path) -> bool:
     venv = install_path / "venv"
-    if not run_command(f"{sys.executable} -m venv {venv}", str(install_path)):
+    if not run(f"{sys.executable} -m venv {venv}"):
         return False
 
     if platform.system() == "Windows":
@@ -145,20 +70,57 @@ def setup_virtual_environment(install_path: Path) -> bool:
         python = venv / "bin" / "python"
         pip = venv / "bin" / "pip"
 
-    run_command(f"{python} -m pip install --upgrade pip", str(install_path))
+    run(f"{python} -m pip install --upgrade pip")
 
-    requirements = install_path / "requirements.txt"
-    if not requirements.exists():
-        log(f"❌ requirements.txt not found at {requirements}", Colors.RED)
+    req = install_path / "requirements.txt"
+    if not req.exists():
+        log(f"❌ requirements.txt not found at: {req}", Colors.RED)
         return False
 
-    return run_command(f"{pip} install -r {requirements}", str(install_path))
+    return run(f"{pip} install -r {req}", cwd=install_path)
 
 
-def run_data_sync(install_path: Path, access_token: str, refresh_token: str) -> bool:
-    env_file = install_path / ".env"
-    env_file.write_text(f"""STRAVA_CLIENT_ID={CLIENT_ID}
-STRAVA_REFRESH_TOKEN={refresh_token}
+def authenticate() -> tuple[Optional[str], Optional[str]]:
+    redirect_uri = f"{TOKEN_SERVICE_URL}/callback"
+    auth_url = (
+        f"https://www.strava.com/oauth/authorize?"
+        f"client_id={CLIENT_ID}&response_type=code&redirect_uri={redirect_uri}"
+        f"&approval_prompt=auto&scope=activity:read_all,profile:read_all"
+    )
+
+    log("🌐 Opening browser to authenticate with Strava")
+    webbrowser.open(auth_url)
+    log("➡️ Complete auth and paste your tokens here")
+
+    access = ask("Access token: ")
+    refresh = ask("Refresh token: ")
+
+    if not access or not refresh:
+        return None, None
+
+    try:
+        r = requests.get(
+            "https://www.strava.com/api/v3/athlete",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        if r.status_code == 200:
+            log(
+                f"✅ Auth successful. Welcome, {r.json().get('firstname')}",
+                Colors.GREEN,
+            )
+            return access, refresh
+        else:
+            log("❌ Token rejected", Colors.RED)
+            return None, None
+    except Exception as e:
+        log(f"⚠️ Couldn't verify token: {e}", Colors.YELLOW)
+        return access, refresh
+
+
+def sync_data(install_path: Path, access: str, refresh: str):
+    env_path = install_path / ".env"
+    env_path.write_text(f"""STRAVA_CLIENT_ID={CLIENT_ID}
+STRAVA_REFRESH_TOKEN={refresh}
 STRAVA_TOKEN_SERVICE_URL={TOKEN_SERVICE_URL}
 STRAVA_DB_PATH={install_path / "strava_data.db"}
 """)
@@ -168,64 +130,85 @@ STRAVA_DB_PATH={install_path / "strava_data.db"}
         / "venv"
         / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
     )
-    return run_command(f'"{python}" strava-sync.py --pages 5', str(install_path))
+    return run(f'"{python}" strava-sync.py --pages 5', cwd=install_path)
 
 
-def restart_claude_desktop():
+def get_claude_config_path() -> Path:
+    home = Path.home()
+    if platform.system() == "Windows":
+        return home / "AppData/Roaming/Claude/claude_desktop_config.json"
+    elif platform.system() == "Darwin":
+        return home / "Library/Application Support/Claude/claude_desktop_config.json"
+    else:
+        return home / ".config/claude/claude_desktop_config.json"
+
+
+def update_config(path: Path, access: str, refresh: str):
+    config_path = get_claude_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
     try:
-        log("🔄 Restarting Claude Desktop...", Colors.BLUE)
+        config = json.loads(config_path.read_text()) if config_path.exists() else {}
+    except:
+        config = {}
+
+    config.setdefault("mcpServers", {})
+    config["mcpServers"]["strava-mcp"] = {
+        "command": "python",
+        "args": [str(path / "strava-mcp.py")],
+        "env": {
+            "STRAVA_CLIENT_ID": CLIENT_ID,
+            "STRAVA_REFRESH_TOKEN": refresh,
+            "STRAVA_TOKEN_SERVICE_URL": TOKEN_SERVICE_URL,
+            "STRAVA_DB_PATH": str(path / "strava_data.db"),
+        },
+    }
+
+    config_path.write_text(json.dumps(config, indent=2))
+    log(f"✅ Claude config written to: {config_path}", Colors.GREEN)
+
+
+def restart_claude():
+    try:
+        log("🔄 Restarting Claude...", Colors.BLUE)
         if platform.system() == "Windows":
             subprocess.run(["taskkill", "/F", "/IM", "Claude.exe"], check=False)
             time.sleep(1)
-            for path in [
-                Path.home() / "AppData/Local/Claude/Claude.exe",
-                Path("C:/Program Files/Claude/Claude.exe"),
-            ]:
-                if path.exists():
-                    subprocess.Popen(
-                        [str(path)], creationflags=subprocess.DETACHED_PROCESS
-                    )
-                    break
-        elif platform.system() == "Darwin":
-            subprocess.run(["pkill", "-f", "Claude"], check=False)
-            time.sleep(1)
-            subprocess.run(["open", "/Applications/Claude.app"], check=False)
+            exe = Path.home() / "AppData/Local/Claude/Claude.exe"
+            if exe.exists():
+                subprocess.Popen([str(exe)], creationflags=subprocess.DETACHED_PROCESS)
         else:
             subprocess.run(["pkill", "-f", "claude"], check=False)
             time.sleep(1)
             subprocess.Popen(["claude"])
-        log("✅ Claude restarted", Colors.GREEN)
+        log("✅ Restart triggered", Colors.GREEN)
     except Exception as e:
-        log(f"⚠️ Failed to restart Claude: {e}", Colors.YELLOW)
+        log(f"⚠️ Could not restart Claude: {e}", Colors.YELLOW)
 
 
 def main():
     signal.signal(
-        signal.SIGINT, lambda *_: (log("\n⏹️  Interrupted", Colors.YELLOW), sys.exit(0))
+        signal.SIGINT,
+        lambda *_: (log("⏹️  Aborted by user", Colors.YELLOW), sys.exit(0)),
     )
 
     log(f"{Colors.BOLD}🏃 Strava MCP Setup Tool{Colors.RESET}")
-    install_path = SCRIPT_DIR  # pipx compatibility fix
+    log(f"📦 Installing in: {INSTALL_PATH}")
 
-    log(f"📦 Installing in: {install_path}")
-    if not setup_virtual_environment(install_path):
-        log("❌ Virtual environment setup failed", Colors.RED)
+    if not setup_virtual_env(INSTALL_PATH):
         sys.exit(1)
 
-    access_token, refresh_token = authenticate_with_strava()
-    if not access_token:
+    access, refresh = authenticate()
+    if not access or not refresh:
         sys.exit(1)
 
-    run_data_sync(install_path, access_token, refresh_token)
-    update_claude_config(install_path, access_token, refresh_token)
+    sync_data(INSTALL_PATH, access, refresh)
+    update_config(INSTALL_PATH, access, refresh)
 
-    if ask_question("Restart Claude Desktop now? (y/n): ").lower().startswith("y"):
-        restart_claude_desktop()
+    if ask("Restart Claude now? (y/n): ").lower().startswith("y"):
+        restart_claude()
 
-    log("\n🎉 Setup complete!", Colors.GREEN)
-    log(f"➡️ You can now ask Claude: 'Show my recent Strava runs'")
-    log(f"📁 Installed to: {install_path}")
-    log(f"⚙️ Config updated: {get_claude_config_path()}")
+    log("\n🎉 Done! You can now talk to Claude about your Strava data.", Colors.GREEN)
 
 
 if __name__ == "__main__":
