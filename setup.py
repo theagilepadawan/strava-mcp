@@ -6,7 +6,7 @@ setup(
     author="Your Name",
     author_email="your.email@example.com",
     description="Automated setup tool for Strava MCP integration with Claude Desktop",
-    long_description=open("../README.md").read(),
+    long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/your-username/strava-mcp",
     py_modules=["setup_strava_mcp"],  # ← Python module uses underscores
