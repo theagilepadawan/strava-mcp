@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="create-strava-mcp",  # ← Package name uses dashes
+    name="create-strava-mcp",
     version="1.0.0",
     author="Michael Gundersen",
     author_email="michael.nesodden@gmail.com",
@@ -9,7 +9,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/theagilepadawan/strava-mcp",
-    py_modules=["setup_strava_mcp"],  # ← Python module uses underscores
+    py_modules=["setup_strava_mcp"],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -24,11 +24,11 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        # No dependencies for the setup tool itself
+        "requests>=2.31.0",
     ],
     entry_points={
         "console_scripts": [
-            "create-strava-mcp=setup_strava_mcp:main",  # ← Entry point: dash=underscore:function
+            "create-strava-mcp=setup_strava_mcp:main",
         ],
     },
 )

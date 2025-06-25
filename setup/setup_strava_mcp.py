@@ -202,7 +202,8 @@ def setup_virtual_environment(install_path: Path) -> bool:
         log("⚠️  Failed to upgrade pip, continuing anyway", Colors.YELLOW)
 
     # Install requirements
-    if not run_command(f"{pip_exe} install -r requirements.txt", str(install_path)):
+    requirements_path = install_path / "backend" / "requirements.txt"
+    if not run_command(f"{pip_exe} install -r {requirements_path}", str(install_path)):
         return False
 
     log("✅ Virtual environment setup complete", Colors.GREEN)
