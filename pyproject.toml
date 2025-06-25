@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "create-strava-mcp"               # ← Package name uses dashes
 version = "1.0.0"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"},
+    {name = "Michael Gundersen", email = "michael.nesodden@gmail.com"},
 ]
 description = "Automated setup tool for Strava MCP integration with Claude Desktop"
 readme = "README.md"
@@ -28,9 +28,9 @@ classifiers = [
 keywords = ["strava", "mcp", "claude", "anthropic", "fitness", "automation"]
 
 [project.urls]
-Homepage = "https://github.com/your-username/strava-mcp"
+Homepage = "https://github.com/theagilepadawan/strava-mcp"
 "Bug Reports" = "https://github.com/your-username/strava-mcp/issues"
-"Source" = "https://github.com/your-username/strava-mcp"
+"Source" = "https://github.com/theagilepadawan/strava-mcp"
 
 [project.scripts]
 create-strava-mcp = "setup_strava_mcp:main"    # ← Entry point: dash = underscore:function
