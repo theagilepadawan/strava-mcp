@@ -30,14 +30,7 @@ class Colors:
 # Config
 TOKEN_SERVICE_URL = "https://strava-mcp-backend.vercel.app"
 CLIENT_ID = "26565"
-
-# Resolve install path even inside pipx
-SCRIPT_PATH = Path(__file__).resolve()
-INSTALL_PATH = SCRIPT_PATH
-while INSTALL_PATH.name != "site-packages" and INSTALL_PATH != INSTALL_PATH.parent:
-    INSTALL_PATH = INSTALL_PATH.parent
-# We're now in the venv's site-packages folder — assume the repo root is one level up
-INSTALL_PATH = INSTALL_PATH.parent
+REPO_URL = "https://github.com/theagilepadawan/strava-mcp.git"
 
 
 def log(msg, color=Colors.RESET):
@@ -64,7 +57,8 @@ def run(cmd: str, cwd: Optional[Path] = None) -> bool:
 
 def setup_virtual_env(install_path: Path) -> bool:
     venv = install_path / "venv"
-    if not run(f"{sys.executable} -m venv {venv}"):
+    log(f"🐍 Setting up Python virtual environment in: {venv}", Colors.BLUE)
+    if not run(f'"{sys.executable}" -m venv "{venv}"'):
         return False
 
     if platform.system() == "Windows":
@@ -209,17 +203,36 @@ def main():
     )
 
     log(f"{Colors.BOLD}🏃 Strava MCP Setup Tool{Colors.RESET}")
-    log(f"📦 Installing in: {INSTALL_PATH}")
 
-    if not setup_virtual_env(INSTALL_PATH):
+    # Step 1: Choose installation directory
+    default_path = Path.home() / ".claude-mcps" / "strava-mcp"
+    install_path_str = ask(
+        f"Press Enter to install in [{default_path}], or type a custom path: "
+    )
+    install_path = Path(install_path_str) if install_path_str else default_path
+
+    # Step 2: Create directory and download repo
+    if (install_path / ".git").is_dir():
+        log(f"✅ Using existing repository at {install_path}", Colors.GREEN)
+    elif install_path.exists() and any(install_path.iterdir()):
+        log(f"❌ Directory '{install_path}' is not empty.", Colors.RED)
+        sys.exit(1)
+    else:
+        log(f"⬇️  Downloading Strava MCP to {install_path}...", Colors.BLUE)
+        install_path.parent.mkdir(parents=True, exist_ok=True)
+        if not run(f'git clone {REPO_URL} "{install_path}"'):
+            log("❌ Failed to clone repository.", Colors.RED)
+            sys.exit(1)
+
+    if not setup_virtual_env(install_path):
         sys.exit(1)
 
     access, refresh = authenticate()
     if not access or not refresh:
         sys.exit(1)
 
-    sync_data(INSTALL_PATH, access, refresh)
-    update_config(INSTALL_PATH, access, refresh)
+    sync_data(install_path, access, refresh)
+    update_config(install_path, access, refresh)
 
     if ask("Restart Claude now? (y/n): ").lower().startswith("y"):
         restart_claude()
