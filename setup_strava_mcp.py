@@ -147,7 +147,7 @@ STRAVA_DB_PATH={install_path / "strava_data.db"}
         / "venv"
         / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
     )
-    return run(f'"{python}" strava-sync.py --pages 5', cwd=install_path)
+    return run(f'"{python}" strava-sync.py --full-sync', cwd=install_path)
 
 
 def get_claude_config_path() -> Path:
