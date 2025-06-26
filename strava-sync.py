@@ -3,9 +3,7 @@
 Strava Sync - Data Initialization Script
 
 This script handles the initial setup and synchronization of Strava data to a local SQLite database.
-Run this script before using the Strava MCP server to fetch and store your data.
-
-Authentication: The script assists in obtaining tokens with activity:read_all scope through OAuth.
+Uses the secure backend service for token management.
 """
 
 import os
@@ -14,10 +12,6 @@ import sqlite3
 import requests
 import argparse
 import logging
-import webbrowser
-import http.server
-import socketserver
-import urllib.parse
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
@@ -34,77 +28,18 @@ logger = logging.getLogger("strava_sync")
 
 # Strava API Constants
 STRAVA_API_BASE_URL = "https://www.strava.com/api/v3"
-STRAVA_AUTH_URL = "https://www.strava.com/oauth/authorize"
-STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 
 # Configuration from environment variables
-CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
-CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
+CLIENT_ID = os.getenv("STRAVA_CLIENT_ID", "26565")
 REFRESH_TOKEN = os.getenv("STRAVA_REFRESH_TOKEN")
+TOKEN_SERVICE_URL = os.getenv(
+    "STRAVA_TOKEN_SERVICE_URL", "https://strava-mcp-backend.vercel.app"
+)
 DB_PATH = os.getenv(
     "STRAVA_DB_PATH",
     os.path.join(os.path.expanduser("~"), ".strava_mcp", "strava_data.db"),
 )
 REQUEST_TIMEOUT = int(os.getenv("STRAVA_REQUEST_TIMEOUT", "30"))
-OAUTH_PORT = int(os.getenv("STRAVA_OAUTH_PORT", "8000"))
-
-# Global variable to store authorization code
-AUTH_CODE = None
-
-
-class OAuthHandler(http.server.SimpleHTTPRequestHandler):
-    """Handler for OAuth callback"""
-
-    def do_GET(self):
-        """Handle GET request"""
-        global AUTH_CODE
-
-        # Parse query parameters
-        query = urllib.parse.urlparse(self.path).query
-        params = urllib.parse.parse_qs(query)
-
-        # Extract authorization code
-        if "code" in params:
-            AUTH_CODE = params["code"][0]
-
-            # Respond to the browser
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-
-            response = """
-            <html>
-            <head><title>Strava OAuth Authentication</title></head>
-            <body>
-                <h1>Authentication Successful!</h1>
-                <p>You have successfully authenticated with Strava.</p>
-                <p>You can close this browser window and return to the application.</p>
-            </body>
-            </html>
-            """
-
-            self.wfile.write(response.encode("utf-8"))
-        else:
-            # Authentication failed
-            self.send_response(400)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-
-            response = """
-            <html>
-            <head><title>Strava OAuth Authentication</title></head>
-            <body>
-                <h1>Authentication Failed</h1>
-                <p>Failed to authenticate with Strava. Please try again.</p>
-            </body>
-            </html>
-            """
-
-            self.wfile.write(response.encode("utf-8"))
-
-    def log_message(self, format, *args):
-        """Suppress server logs"""
-        return
 
 
 def init_db(conn):
@@ -202,99 +137,87 @@ def init_db(conn):
     conn.commit()
 
 
-def authorize_with_strava(client_id=None, port=None):
-    """Start OAuth flow with Strava"""
-    client_id = client_id or CLIENT_ID
-    port = port or OAUTH_PORT
-
-    if not client_id:
-        raise ValueError("Missing Strava API Client ID")
-
-    # Prepare authorization URL
-    redirect_uri = f"http://localhost:{port}"
-    auth_url = (
-        f"{STRAVA_AUTH_URL}?"
-        f"client_id={client_id}&"
-        f"response_type=code&"
-        f"redirect_uri={redirect_uri}&"
-        f"approval_prompt=auto&"
-        f"scope=activity:read_all,profile:read_all,read_all"
+def get_stored_token(conn) -> Optional[Dict[str, any]]:
+    """Get the most recent stored token"""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT access_token, refresh_token, expires_at FROM auth_token ORDER BY created_at DESC LIMIT 1"
     )
+    token_row = cursor.fetchone()
 
-    print("\n==== Strava API Authentication ====")
-    print("Opening browser for Strava authentication...")
-    print(f"If the browser doesn't open automatically, please go to:\n{auth_url}\n")
+    if not token_row:
+        return None
 
-    # Open browser to the authorization URL
-    webbrowser.open(auth_url)
-
-    # Start simple HTTP server to handle callback
-    with socketserver.TCPServer(("", port), OAuthHandler) as httpd:
-        print(f"Waiting for authentication on http://localhost:{port}...")
-        print("Please authenticate in your browser and authorize the application.")
-
-        # Serve until authorization code is received
-        while AUTH_CODE is None:
-            httpd.handle_request()
-
-    print("Authentication successful! Received authorization code.")
-    return AUTH_CODE
+    return {
+        "access_token": token_row[0],
+        "refresh_token": token_row[1],
+        "expires_at": token_row[2],
+    }
 
 
-def exchange_code_for_token(client_id, client_secret, code):
-    """Exchange authorization code for access token"""
-    response = requests.post(
-        STRAVA_TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-        },
-        timeout=REQUEST_TIMEOUT,
-    )
+def refresh_strava_access_token(refresh_token: str) -> Dict[str, any]:
+    """Refresh access token using the backend service"""
+    try:
+        logger.info("Refreshing access token using backend service...")
 
-    if response.status_code != 200:
-        raise Exception(f"Failed to exchange code for token: {response.text}")
-
-    data = response.json()
-    return data["access_token"], data["refresh_token"], data["expires_at"]
-
-
-def get_strava_access_token(client_id=None, client_secret=None, refresh_token=None):
-    """Get a fresh access token using refresh token"""
-    client_id = client_id or CLIENT_ID
-    client_secret = client_secret or CLIENT_SECRET
-    refresh_token = refresh_token or REFRESH_TOKEN
-
-    if not client_id or not client_secret:
-        raise ValueError(
-            "Missing Strava API credentials. Please check your .env file or provide them as parameters."
+        response = requests.post(
+            f"{TOKEN_SERVICE_URL}/refresh-token",
+            json={"refresh_token": refresh_token},
+            headers={"Content-Type": "application/json"},
+            timeout=REQUEST_TIMEOUT,
         )
 
-    # If no refresh token, start OAuth flow
-    if not refresh_token:
-        logger.info("No refresh token found. Starting OAuth flow...")
-        auth_code = authorize_with_strava(client_id)
-        return exchange_code_for_token(client_id, client_secret, auth_code)
+        if response.status_code != 200:
+            raise Exception(f"Token refresh failed: {response.text}")
 
-    # Otherwise, use refresh token to get a new access token
-    response = requests.post(
-        STRAVA_TOKEN_URL,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=REQUEST_TIMEOUT,
+        data = response.json()
+        logger.info("Token refresh successful")
+
+        return {
+            "access_token": data["access_token"],
+            "refresh_token": data["refresh_token"],
+            "expires_at": data["expires_at"],
+        }
+
+    except Exception as e:
+        logger.error(f"Token refresh error: {e}")
+        raise Exception(f"Failed to refresh Strava token: {str(e)}")
+
+
+def ensure_valid_token(conn) -> str:
+    """Ensure we have a valid access token"""
+    # Try to get stored token
+    stored_token = get_stored_token(conn)
+
+    if stored_token:
+        # Check if token is still valid (with 60 second buffer)
+        if stored_token["expires_at"] > datetime.now().timestamp() + 60:
+            logger.info("Using existing valid token")
+            return stored_token["access_token"]
+        else:
+            logger.info("Stored token expired, refreshing...")
+            # Use stored refresh token to get new token
+            refresh_token = stored_token["refresh_token"]
+    else:
+        # No stored token, use refresh token from environment
+        if not REFRESH_TOKEN:
+            raise ValueError(
+                "No refresh token available. Please run the setup tool first."
+            )
+        refresh_token = REFRESH_TOKEN
+
+    # Refresh the token using backend service
+    new_token = refresh_strava_access_token(refresh_token)
+
+    # Store the new token
+    store_token(
+        conn,
+        new_token["access_token"],
+        new_token["refresh_token"],
+        new_token["expires_at"],
     )
 
-    if response.status_code != 200:
-        raise Exception(f"Failed to refresh token: {response.text}")
-
-    data = response.json()
-    return data["access_token"], data["refresh_token"], data["expires_at"]
+    return new_token["access_token"]
 
 
 def store_token(conn, access_token, refresh_token, expires_at):
@@ -305,6 +228,7 @@ def store_token(conn, access_token, refresh_token, expires_at):
         (access_token, refresh_token, expires_at, int(datetime.now().timestamp())),
     )
     conn.commit()
+    logger.info("Stored new token in database")
 
 
 def strava_api_request(method, endpoint, access_token, params=None, data=None):
@@ -554,39 +478,9 @@ def fetch_activity_details(access_token, activity_id, conn):
     return activity_data
 
 
-def print_token_instructions():
-    """Print instructions for manually setting up tokens"""
-    print("\n=== Manual Token Setup Instructions ===")
-    print("If the automatic OAuth flow doesn't work, you can manually get a token:")
-    print("\n1. Register your application at https://www.strava.com/settings/api")
-    print("2. Set the 'Authorization Callback Domain' to 'localhost'")
-    print("\n3. Visit this URL in your browser (replace YOUR_CLIENT_ID):")
-    print(
-        "   https://www.strava.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=auto&scope=activity:read_all,profile:read_all,read_all"
-    )
-    print("\n4. After authorizing, you'll be redirected to a URL like:")
-    print(
-        "   http://localhost/?state=&code=AUTHORIZATION_CODE&scope=read,activity:read_all,profile:read_all"
-    )
-    print("\n5. Copy the 'code' parameter from the URL")
-    print("\n6. Exchange the code for tokens using:")
-    print(
-        "   curl -X POST https://www.strava.com/oauth/token -d client_id=YOUR_CLIENT_ID -d client_secret=YOUR_CLIENT_SECRET -d code=AUTHORIZATION_CODE -d grant_type=authorization_code"
-    )
-    print("\n7. Store the refresh_token in your .env file as STRAVA_REFRESH_TOKEN")
-    print("============================================\n")
-
-
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(description="Sync Strava data to local database")
-    parser.add_argument("--client-id", help="Strava API client ID (overrides .env)")
-    parser.add_argument(
-        "--client-secret", help="Strava API client secret (overrides .env)"
-    )
-    parser.add_argument(
-        "--refresh-token", help="Strava API refresh token (overrides .env)"
-    )
     parser.add_argument("--db-path", help="Path to SQLite database (overrides .env)")
     parser.add_argument(
         "--full-sync",
@@ -602,32 +496,27 @@ def main():
         "--activity-id", type=str, help="Fetch detailed data for specific activity ID"
     )
     parser.add_argument(
-        "--oauth-port",
-        type=int,
-        default=OAUTH_PORT,
-        help="Port to use for OAuth callback server",
-    )
-    parser.add_argument(
-        "--manual-auth",
-        action="store_true",
-        help="Show instructions for manual token setup",
+        "--token-service-url", help="Token service URL (overrides .env)"
     )
 
     args = parser.parse_args()
 
-    if args.manual_auth:
-        print_token_instructions()
-        return 0
-
     # Override with command-line arguments if provided
-    client_id = args.client_id or CLIENT_ID
-    client_secret = args.client_secret or CLIENT_SECRET
-    refresh_token = args.refresh_token or REFRESH_TOKEN
     db_path = args.db_path or DB_PATH
+    token_service_url = args.token_service_url or TOKEN_SERVICE_URL
 
-    if not client_id or not client_secret:
+    # Validate configuration
+    if not CLIENT_ID:
+        logger.error("Missing STRAVA_CLIENT_ID. Please check your .env file.")
+        return 1
+
+    if not token_service_url:
+        logger.error("Missing STRAVA_TOKEN_SERVICE_URL. Please check your .env file.")
+        return 1
+
+    if not REFRESH_TOKEN:
         logger.error(
-            "Missing Strava API credentials. Please set them in .env file or provide as arguments."
+            "Missing STRAVA_REFRESH_TOKEN. Please run the setup tool first to get your tokens."
         )
         return 1
 
@@ -635,23 +524,16 @@ def main():
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
     logger.info(f"Connecting to database at {db_path}")
+    logger.info(f"Using token service: {token_service_url}")
+
     conn = sqlite3.connect(db_path)
 
     # Initialize database schema
     init_db(conn)
 
     try:
-        # Get fresh access token
-        logger.info("Obtaining access token...")
-        access_token, new_refresh_token, expires_at = get_strava_access_token(
-            client_id, client_secret, refresh_token
-        )
-        logger.info(
-            f"Got access token, expires at {datetime.fromtimestamp(expires_at)}"
-        )
-
-        # Store token for later use
-        store_token(conn, access_token, new_refresh_token, expires_at)
+        # Get valid access token (refreshes if needed)
+        access_token = ensure_valid_token(conn)
 
         if args.activity_id:
             # Fetch detailed data for a specific activity
@@ -668,17 +550,13 @@ def main():
                 f"Sync complete. Fetched data for {athlete.get('firstname')} {athlete.get('lastname')}"
             )
             logger.info(f"Synced {activity_count} activities")
-            logger.info(f"New refresh token: {new_refresh_token}")
 
             # Print summary
             print(f"\nSync complete!")
             print(f"Athlete: {athlete.get('firstname')} {athlete.get('lastname')}")
             print(f"Activities: {activity_count}")
             print(f"Database: {db_path}")
-            print(f"New refresh token: {new_refresh_token}")
             print("\nYou can now use the Strava MCP server to access this data.")
-            print(f"Add this to your .env file to avoid authentication next time:")
-            print(f"STRAVA_REFRESH_TOKEN={new_refresh_token}")
 
     except Exception as e:
         logger.error(f"Error: {e}")
