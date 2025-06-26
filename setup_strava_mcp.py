@@ -169,9 +169,15 @@ def update_config(path: Path, access: str, refresh: str):
     except:
         config = {}
 
+    python_executable = (
+        path
+        / "venv"
+        / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
+    )
+
     config.setdefault("mcpServers", {})
     config["mcpServers"]["strava-mcp"] = {
-        "command": "python",
+        "command": str(python_executable),
         "args": [str(path / "strava-mcp.py")],
         "env": {
             "STRAVA_CLIENT_ID": CLIENT_ID,
