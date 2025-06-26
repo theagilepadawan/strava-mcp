@@ -178,7 +178,7 @@ def oauth_callback():
         </body>
         </html>
         """,
-            token_data=json.dumps(token_data),
+            token_data=token_data,
         ), 200
 
     except Exception as e:

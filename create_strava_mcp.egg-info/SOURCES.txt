@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+setup_strava_mcp.py
+create_strava_mcp.egg-info/PKG-INFO
+create_strava_mcp.egg-info/SOURCES.txt
+create_strava_mcp.egg-info/dependency_links.txt
+create_strava_mcp.egg-info/entry_points.txt
+create_strava_mcp.egg-info/requires.txt
+create_strava_mcp.egg-info/top_level.txt

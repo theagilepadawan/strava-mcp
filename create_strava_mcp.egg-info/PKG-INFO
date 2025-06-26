@@ -1,0 +1,295 @@
+Metadata-Version: 2.4
+Name: create-strava-mcp
+Version: 1.0.0
+Summary: Automated setup tool for Strava MCP integration with Claude Desktop
+Author-email: Michael Gundersen <michael.nesodden@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/theagilepadawan/strava-mcp
+Project-URL: Bug Reports, https://github.com/your-username/strava-mcp/issues
+Project-URL: Source, https://github.com/theagilepadawan/strava-mcp
+Keywords: strava,mcp,claude,anthropic,fitness,automation
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.31.0
+
+# Create Strava MCP
+
+Automated setup tool for integrating Strava data with Claude Desktop via Model Context Protocol (MCP).
+
+## Quick Start
+
+The Python equivalent of `npx` is `pipx`. Install and run:
+
+```bash
+# Install pipx if you don't have it
+pip install pipx
+
+# Run the setup tool (installs temporarily and executes)
+pipx run create-strava-mcp
+```
+
+**Or install globally:**
+
+```bash
+# Install globally
+pipx install create-strava-mcp
+
+# Run anytime
+create-strava-mcp
+```
+
+**Or use pip + python -m:**
+
+```bash
+# Install and run directly
+pip install create-strava-mcp
+python -m create-strava-mcp
+```
+
+## What This Tool Does
+
+1. **Downloads the Strava MCP**: Clones the Python repository to your local machine
+2. **Sets up Python Environment**: Creates a virtual environment and installs dependencies
+3. **Guides Strava API Setup**: Walks you through creating a Strava API application
+4. **Handles Authentication**: Manages the OAuth flow to get your tokens
+5. **Data Sync**: Downloads your initial Strava activity data to a local SQLite database
+6. **Claude Integration**: Automatically updates your Claude Desktop config file
+7. **Optional Restart**: Can restart Claude Desktop to activate the MCP immediately
+8. **Ready to Use**: After setup, Claude will have access to your Strava data
+
+## Strava API Application Setup
+
+### The "One App for Everybody" Approach
+
+You need to create **ONE** Strava API application that all users will authenticate through:
+
+1. **Register Your App** (you do this once):
+   - Go to [Strava API Settings](https://www.strava.com/settings/api)
+   - Click "Create App"
+   - Fill in the details:
+     - **Application Name**: "Strava MCP" (or your preferred name)
+     - **Category**: Choose appropriate category
+     - **Website**: `http://localhost`
+     - **Authorization Callback Domain**: `localhost`
+   - Click "Create"
+
+2. **Share Your App Credentials**:
+   - You'll get a `Client ID` and `Client Secret`
+   - Users will use **your** `Client ID` and `Client Secret`
+   - Each user gets their own personal `Access Token` and `Refresh Token`
+
+3. **User Authentication Flow**:
+   - Users run the setup tool with your app credentials
+   - They authenticate through **your** Strava app
+   - They get their own personal tokens
+   - Their data stays private to them
+
+### Authentication Flow Details
+
+```
+Your Strava App (Client ID + Secret)
+         ↓
+User runs setup tool → Browser opens → User logs into Strava
+         ↓
+User authorizes YOUR app → Gets personal tokens → Stored locally
+         ↓
+MCP uses user's personal tokens → Accesses only their data
+```
+
+## Manual Installation
+
+If you prefer manual setup:
+
+```bash
+# Clone your Strava MCP repository
+git clone https://github.com/your-username/strava-mcp.git
+cd strava-mcp
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your Strava app credentials
+
+# Run authentication and initial sync
+python strava-sync.py
+
+# Add to Claude config manually (see Configuration section)
+```
+
+## Configuration
+
+The tool automatically updates your Claude Desktop config file:
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
+
+Example configuration:
+
+```json
+{
+  "mcpServers": {
+    "strava-mcp": {
+      "command": "python",
+      "args": ["/path/to/strava-mcp/strava-mcp.py"],
+      "env": {
+        "STRAVA_CLIENT_ID": "your_client_id",
+        "STRAVA_CLIENT_SECRET": "your_client_secret", 
+        "STRAVA_REFRESH_TOKEN": "users_personal_refresh_token",
+        "STRAVA_DB_PATH": "/path/to/strava_data.db"
+      }
+    }
+  }
+}
+```
+
+## For Developers: Publishing Your Setup Tool
+
+### 1. Package Structure
+```
+create-strava-mcp/
+├── setup_strava_mcp.py    # Main setup script
+├── pyproject.toml         # Modern Python packaging
+├── setup.py              # Alternative setup file
+├── README.md             # This file
+└── requirements.txt      # Dependencies (none for setup tool)
+```
+
+### 2. Update Configuration
+
+In `setup_strava_mcp.py`, update:
+
+```python
+# Replace with your actual Strava MCP repository
+repo_url = "https://github.com/your-username/strava-mcp.git"
+```
+
+### 3. Publish to PyPI
+
+```bash
+# Build the package
+python -m pip install build
+python -m build
+
+# Upload to PyPI
+python -m pip install twine
+python -m twine upload dist/*
+```
+
+### 4. Test Installation
+
+```bash
+# Test with pipx
+pipx run create-strava-mcp
+
+# Or test with pip
+pip install create-strava-mcp
+create-strava-mcp
+```
+
+## Usage After Setup
+
+Once set up, you can ask Claude questions about your Strava data:
+
+- "Show me my recent running activities"
+- "What's my average pace this month?"
+- "Compare my performance to last year"
+- "Generate a training summary"
+- "Which bike have I used the most this year?"
+
+## Maintenance Commands
+
+```bash
+# Update your Strava data
+cd /path/to/strava-mcp
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+python strava-sync.py
+
+# Check MCP status
+# (View Claude Desktop logs)
+```
+
+## Troubleshooting
+
+### Setup Issues
+
+1. **Python not found**: Install Python 3.8+ from [python.org](https://python.org/)
+2. **Git not found**: Install Git from [git-scm.com](https://git-scm.com/)
+3. **Permission errors**: Run with appropriate permissions or choose a different install directory
+4. **Virtual environment issues**: Ensure you have `venv` module: `python -m pip install virtualenv`
+
+### Strava API Issues
+
+1. **Invalid credentials**: Double-check your Client ID and Client Secret from Strava
+2. **Authorization failed**: Ensure your Strava app has the correct callback domain (`localhost`)
+3. **Token expired**: The MCP automatically refreshes tokens, but you can manually re-run `strava-sync.py`
+4. **Rate limiting**: Strava has API limits; wait a few minutes if you hit them
+
+### Claude Integration Issues
+
+1. **MCP not appearing**: Restart Claude Desktop completely
+2. **Connection errors**: Check that file paths in the config are correct
+3. **Python not found**: Ensure the Python path in Claude config points to your virtual environment
+4. **Data not loading**: Run `python strava-sync.py` in the MCP directory
+
+## Token Security
+
+- **Your App Credentials**: Keep `Client ID` and `Client Secret` secure but they can be shared with users
+- **User Tokens**: Each user's `Access Token` and `Refresh Token` are personal and should stay private
+- **Local Storage**: All tokens are stored locally on the user's machine, never sent to you
+
+## Uninstalling
+
+To remove the Strava MCP:
+
+1. Delete the installation directory (shown during setup)
+2. Remove the "strava-mcp" entry from your Claude Desktop config file
+3. Restart Claude Desktop
+
+## Alternative to pipx
+
+If users don't want to install pipx, they can also use:
+
+```bash
+# Direct pip install and run
+pip install create-strava-mcp
+python -c "import setup_strava_mcp; setup_strava_mcp.main()"
+
+# Or install and use entry point
+pip install create-strava-mcp
+create-strava-mcp
+```
+
+## Support
+
+If you encounter issues:
+
+1. Check the troubleshooting section above
+2. Check Claude Desktop logs for MCP errors
+3. Re-run `python strava-sync.py` to refresh data
+4. Create an issue on the GitHub repository
+
+## Contributing
+
+Contributions welcome! Please see the main repository for guidelines.
+
+## License
+
+MIT License - see LICENSE file for details.

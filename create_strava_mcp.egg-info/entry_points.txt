@@ -1,0 +1,2 @@
+[console_scripts]
+create-strava-mcp = setup_strava_mcp:main

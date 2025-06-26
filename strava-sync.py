@@ -264,7 +264,7 @@ def strava_api_request(method, endpoint, access_token, params=None, data=None):
 def fetch_strava_activities(access_token, conn, page_limit=None):
     """Fetch all activities from Strava API"""
     page = 1
-    per_page = 100
+    per_page = 200
     all_activities = []
     total_fetched = 0
 
