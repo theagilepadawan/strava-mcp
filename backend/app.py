@@ -166,21 +166,13 @@ def oauth_callback():
         <body style="font-family: sans-serif; max-width: 600px; margin: 50px auto; text-align: center;">
             <h1 style="color: #4caf50;">✅ Authentication Successful!</h1>
             <p>You have successfully authenticated with Strava.</p>
-            <p>Your tokens have been generated. Please return to the setup tool.</p>
+            <p>Please copy the tokens below and paste them into the setup tool:</p>
             
-            <!-- Hidden data for setup tool to extract -->
-            <div id="token-data" style="display: none;">{{token_data}}</div>
-            
-            <script>
-                // If this page was opened in a popup, send data to parent
-                if (window.opener) {
-                    window.opener.postMessage({
-                        type: 'strava_auth_success',
-                        data: {{token_data|safe}}
-                    }, '*');
-                    window.close();
-                }
-            </script>
+            <div style="background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px auto; text-align: left; max-width: 400px; word-break: break-all;">
+                <strong>Access Token:</strong> <span id="access-token">{{token_data.access_token}}</span><br>
+                <strong>Refresh Token:</strong> <span id="refresh-token">{{token_data.refresh_token}}</span><br>
+                <strong>Expires At:</strong> <span id="expires-at">{{token_data.expires_at}}</span>
+            </div>
             
             <p style="margin-top: 30px; color: #666;">You can close this window now.</p>
         </body>
