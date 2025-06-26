@@ -27,6 +27,8 @@ setup(
         "requests>=2.31.0",
         "toml",
         "dotenv",
+        "mcp",
+        "pydantic",
     ],
     entry_points={
         "console_scripts": [
